@@ -38,9 +38,13 @@ const Policies = () => {
     const fetchPolicies = async () => {
         try {
             const response = await api.get('/operations/policies/');
-            setPolicies(response.data);
+            // DRF returns array directly, but sometimes wrapped in object with 'results' key
+            const policiesData = Array.isArray(response.data) ? response.data : (response.data.results || []);
+            setPolicies(policiesData);
+            console.log('Fetched policies:', policiesData);
         } catch (error) {
             console.error("Failed to fetch policies", error);
+            setPolicies([]);
         } finally {
             setLoading(false);
         }

@@ -16,7 +16,7 @@ class BankStatementSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BankStatement
-        fields = ['id', 'name', 'uploaded_at', 'lines', 'unmatched_count', 'matched_count']
+        fields = ['id', 'name', 'uploaded_at', 'file', 'lines', 'unmatched_count', 'matched_count']
 
     def get_unmatched_count(self, obj):
         return obj.lines.filter(status='UNMATCHED').count()

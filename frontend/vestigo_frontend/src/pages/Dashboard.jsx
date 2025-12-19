@@ -62,16 +62,8 @@ const Dashboard = () => {
         count: item.count
     })) : [];
 
-    // Mock Trend Data (keep untill we have real historical data endpoint)
-    const trendData = [
-        { name: 'Jan', premium: 4000 },
-        { name: 'Feb', premium: 3000 },
-        { name: 'Mar', premium: 2000 },
-        { name: 'Apr', premium: 2780 },
-        { name: 'May', premium: 1890 },
-        { name: 'Jun', premium: 2390 },
-        { name: 'Jul', premium: stats.total_premium > 10000 ? stats.total_premium / 2 : 3490 },
-    ];
+    // Use real premium trend from backend
+    const trendData = stats.premium_trend || [];
 
     return (
         <div className="min-h-screen bg-gray-50 pb-12">
@@ -137,12 +129,13 @@ const Dashboard = () => {
                     <dd className="ml-16 flex flex-col items-baseline pb-1 sm:pb-2">
                         <p className="text-3xl font-bold">${stats.total_premium.toLocaleString()}</p>
                         <div className="flex items-center mt-2">
-                            <ArrowRightIcon className="h-4 w-4 text-green-300 mr-1" />
-                            <span className="text-sm text-indigo-200">+12.3% from last month</span>
+                            <ArrowRightIcon className={`h-4 w-4 mr-1 ${stats.premium_growth >= 0 ? 'text-green-300' : 'text-red-300'}`} />
+                            <span className="text-sm text-indigo-200">
+                                {stats.premium_growth >= 0 ? '+' : ''}{stats.premium_growth}% from last month
+                            </span>
                         </div>
                     </dd>
                 </Link>
-
                 {/* Metric 2 - Claims Impact */}
                 <Link to="/claims" className="relative overflow-hidden rounded-xl bg-white p-6 shadow-md border-l-4 border-red-500 hover:shadow-xl transition-shadow cursor-pointer">
                     <dt>
@@ -157,7 +150,9 @@ const Dashboard = () => {
                             <span className={`inline-flex items-baseline rounded-full px-2.5 py-0.5 text-sm font-medium ${stats.loss_ratio > 70 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
                                 LR: {stats.loss_ratio}%
                             </span>
-                            <span className="text-xs text-gray-500">-2.1% vs last month</span>
+                            <span className="text-xs text-gray-500">
+                                {stats.claims_trend >= 0 ? '+' : ''}{stats.claims_trend}% vs last month
+                            </span>
                         </div>
                     </dd>
                 </Link>
@@ -174,7 +169,9 @@ const Dashboard = () => {
                         <p className="text-2xl font-bold text-gray-900">{stats.pipeline ? stats.pipeline.reduce((acc, curr) => acc + curr.count, 0) : 0} Deals</p>
                         <div className="flex items-center mt-2">
                             <ArrowRightIcon className="h-4 w-4 text-green-600 mr-1" />
-                            <span className="text-xs text-green-600 font-medium">+8 new this week</span>
+                            <span className="text-xs text-green-600 font-medium">
+                                +{stats.new_this_week || 0} new this week
+                            </span>
                         </div>
                     </dd>
                 </Link>
@@ -191,7 +188,9 @@ const Dashboard = () => {
                         <p className="text-2xl font-bold text-gray-900">{stats.pending_submissions}</p>
                         <div className="flex items-center mt-2">
                             <span className="text-xs text-yellow-600 font-semibold">Pending Review</span>
-                            <span className="text-xs text-gray-500 ml-2">Avg: 2.3 days</span>
+                            <span className="text-xs text-gray-500 ml-2">
+                                Avg: {stats.avg_underwriting_days || 0} days
+                            </span>
                         </div>
                     </dd>
                 </Link>

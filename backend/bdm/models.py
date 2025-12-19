@@ -49,6 +49,8 @@ class Opportunity(SoftDeleteModel):
     stage = models.CharField(max_length=20, choices=STAGE_CHOICES, default=STAGE_DISCOVERY)
     expected_revenue = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     expected_close_date = models.DateField(null=True, blank=True)
+    probability = models.IntegerField(default=25, help_text="Win probability percentage (0-100)")
+    notes = models.TextField(blank=True, help_text="Additional notes about the opportunity")
     assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='opportunities')
 
     def __str__(self):

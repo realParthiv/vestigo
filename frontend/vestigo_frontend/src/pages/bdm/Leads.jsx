@@ -131,6 +131,48 @@ const Leads = () => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
+    const handleConvertToOpportunity = async (lead) => {
+        const opportunityName = prompt("Enter opportunity name:", `${lead.first_name} ${lead.last_name} - Policy`);
+        if (!opportunityName) return;
+
+        try {
+            const payload = {
+                name: opportunityName,
+                lead: lead.id,
+                stage: 'DISCOVERY',
+                expected_premium: 0,
+                probability: 25,
+                notes: `Converted from lead: ${lead.first_name} ${lead.last_name}`
+            };
+            
+            await api.post('/bdm/opportunities/', payload);
+            
+            // Mark lead as CONVERTED
+            await api.put(`/bdm/leads/${lead.id}/`, {
+                ...lead,
+                status: 'CONVERTED'
+            });
+            
+            fetchLeads();
+            alert("Lead converted to Opportunity! Go to Opportunities Board to manage it.");
+        } catch (error) {
+            console.error("Failed to convert lead", error);
+            alert("Failed to convert lead. Please try again.");
+        }
+    };
+
+    const handleDeleteLead = async (id) => {
+        if (window.confirm("Are you sure you want to delete this lead?")) {
+            try {
+                await api.delete(`/bdm/leads/${id}/`);
+                fetchLeads();
+            } catch (error) {
+                console.error("Failed to delete lead", error);
+                alert("Failed to delete lead.");
+            }
+        }
+    };
+
     if (loading) return <div>Loading...</div>;
 
     return (
@@ -210,11 +252,26 @@ const Leads = () => {
                                             </span>
                                         </td>
                                         <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
+                                            {lead.status !== 'CONVERTED' && (
+                                                <button
+                                                    onClick={() => handleConvertToOpportunity(lead)}
+                                                    className="text-green-600 hover:text-green-900 mr-4"
+                                                    title="Convert to Opportunity"
+                                                >
+                                                    Convert
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={() => handleOpenModal(lead)}
-                                                className="text-indigo-600 hover:text-indigo-900"
+                                                className="text-indigo-600 hover:text-indigo-900 mr-4"
                                             >
-                                                Edit<span className="sr-only">, {lead.first_name}</span>
+                                                Edit
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteLead(lead.id)}
+                                                className="text-red-600 hover:text-red-900"
+                                            >
+                                                Delete<span className="sr-only">, {lead.first_name}</span>
                                             </button>
                                         </td>
                                     </tr>

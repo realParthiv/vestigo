@@ -27,3 +27,33 @@ class Submission(SoftDeleteModel):
 
     def __str__(self):
         return f"SUB-{self.id} ({self.opportunity.name})"
+    
+    def calculate_risk_score(self):
+        """Calculate risk score based on opportunity data"""
+        score = 25  # Base score
+        
+        # Factor in probability (inverse relationship)
+        if self.opportunity.probability:
+            score += (100 - self.opportunity.probability) // 2
+        
+        # Factor in premium amount (higher premium = higher risk)
+        if self.opportunity.expected_revenue:
+            if self.opportunity.expected_revenue > 100000:
+                score += 30
+            elif self.opportunity.expected_revenue > 50000:
+                score += 20
+            elif self.opportunity.expected_revenue > 10000:
+                score += 10
+        
+        return min(score, 100)  # Cap at 100
+    
+    def save(self, *args, **kwargs):
+        # Auto-calculate risk score if not set
+        if self.risk_score is None:
+            self.risk_score = self.calculate_risk_score()
+        
+        # Snapshot submitted premium
+        if not self.submitted_premium and self.opportunity:
+            self.submitted_premium = self.opportunity.expected_revenue
+        
+        super().save(*args, **kwargs)

@@ -5,7 +5,7 @@ from operations.models import Policy
 class BankStatement(TimeStampedModel):
     name = models.CharField(max_length=255, help_text="e.g. Jan 2025 Statement")
     uploaded_at = models.DateTimeField(auto_now_add=True)
-    # file = models.FileField(upload_to='statements/') # Skipping actual file storage for MVP, parsing text directly
+    file = models.FileField(upload_to='statements/', null=True, blank=True, help_text="Original statement file")
 
     def __str__(self):
         return self.name

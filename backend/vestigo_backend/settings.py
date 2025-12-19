@@ -13,7 +13,8 @@ environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-test-key')
 DEBUG = env.bool('DEBUG', default=True)
 
-ALLOWED_HOSTS = ['*']
+# Parse ALLOWED_HOSTS from .env (comma-separated)
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
 
 # Application definition
 INSTALLED_APPS = [
@@ -113,7 +114,7 @@ AUTH_USER_MODEL = 'users.User'
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny', # Change to IsAuthenticated later
+        'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -123,7 +124,13 @@ REST_FRAMEWORK = {
 }
 
 # CORS
-CORS_ALLOW_ALL_ORIGINS = True # Dev only
+# In production, set CORS_ALLOWED_ORIGINS in .env as comma-separated list
+# Development default allows localhost:5173 (Vite)
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = env.bool('CORS_ALLOW_ALL_ORIGINS', default=True)
+else:
+    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
 
 from datetime import timedelta
 

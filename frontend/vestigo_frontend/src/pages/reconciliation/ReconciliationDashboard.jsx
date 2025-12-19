@@ -7,6 +7,7 @@ const ReconciliationDashboard = () => {
     const [statements, setStatements] = useState([]);
     const navigate = useNavigate();
     const [uploading, setUploading] = useState(false);
+    const [selectedFile, setSelectedFile] = useState(null);
 
     useEffect(() => {
         fetchStatements();
@@ -23,6 +24,7 @@ const ReconciliationDashboard = () => {
 
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('name', file.name);
         setUploading(true);
 
         try {
@@ -36,6 +38,7 @@ const ReconciliationDashboard = () => {
             alert("Upload Failed");
         } finally {
             setUploading(false);
+            setSelectedFile(null);
         }
     };
 

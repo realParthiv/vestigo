@@ -4,6 +4,8 @@ from .models import BankStatement, BankLine
 from .serializers import BankStatementSerializer, BankLineSerializer
 from .services import AutoReconcileService
 from operations.models import Policy
+from core.permissions import RolePermission
+from users.models import Role
 import csv
 import io
 from datetime import datetime
@@ -11,25 +13,19 @@ from datetime import datetime
 class BankStatementViewSet(viewsets.ModelViewSet):
     queryset = BankStatement.objects.all()
     serializer_class = BankStatementSerializer
+    permission_classes = [RolePermission]
+    allowed_roles = [Role.ADMIN, Role.FINANCE]
 
     @decorators.action(detail=False, methods=['post'])
     def upload_csv(self, request):
         """
-        Accepts a generic CSV upload.
+        Accepts a generic CSV upload with optional file storage.
         Expected Header: Date, Description, Amount, Reference
         """
+        file = request.FILES.get('file')
         if not file:
             return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Basic De-duplication check by filename/content length could be better, but name is simple
-        # For this MVP, we just ensure we don't process if a very recent upload exists? 
-        # Actually user asked for name check.
-        
-        # Let's use the filename as part of the unique check if possible, or just skip if exact name exists?
-        # Since I generate name with timestamp, it's unique.
-        # Let's try to detect if the FILE content is duplicate using hash? Or just simple name check from FE?
-        # I'll rely on the user input or file name.
-        
         input_name = request.data.get('name') or file.name
         if BankStatement.objects.filter(name=input_name).exists():
              return Response({'error': f'Statement with name "{input_name}" already exists.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -39,17 +35,14 @@ class BankStatementViewSet(viewsets.ModelViewSet):
         reader = csv.DictReader(io_string)
 
         statement_name = input_name
-        # If no name provided, fall back to timestamp
         if not request.data.get('name'):
              statement_name = f"Import {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
 
-        statement = BankStatement.objects.create(name=statement_name)
+        # Save file reference
+        statement = BankStatement.objects.create(name=statement_name, file=file)
 
         lines_created = 0
         for row in reader:
-            # Basic parsing, assumming clean data/headers matching EXACTLY for MVP
-            # date_str = row.get('Date', datetime.now().strftime('%Y-%m-%d')) # Fallback
-            
             try:
                 BankLine.objects.create(
                     statement=statement,
@@ -80,6 +73,8 @@ class BankStatementViewSet(viewsets.ModelViewSet):
 class BankLineViewSet(viewsets.ModelViewSet):
     queryset = BankLine.objects.all()
     serializer_class = BankLineSerializer
+    permission_classes = [RolePermission]
+    allowed_roles = [Role.ADMIN, Role.FINANCE]
 
     @decorators.action(detail=True, methods=['post'])
     def manual_match(self, request, pk=None):

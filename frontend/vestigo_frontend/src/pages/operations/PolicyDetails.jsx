@@ -28,6 +28,9 @@ const PolicyDetails = () => {
         description: '',
         claim_amount: ''
     });
+    const [paymentActionLoading, setPaymentActionLoading] = useState(false);
+    const [policyActionLoading, setPolicyActionLoading] = useState(false);
+    const [scheduleLoading, setScheduleLoading] = useState(false);
 
     useEffect(() => {
         fetchPolicyDetails();
@@ -71,6 +74,44 @@ const PolicyDetails = () => {
 
     const { policy, customer, claims, statistics } = policyData;
 
+    const handlePolicyAction = async (action) => {
+        setPolicyActionLoading(true);
+        try {
+            await api.post(`/operations/policies/${id}/${action}/`);
+            await fetchPolicyDetails();
+        } catch (err) {
+            alert('Policy action failed');
+        } finally {
+            setPolicyActionLoading(false);
+        }
+    };
+
+    const handlePaymentAction = async (paymentId, action, payload = {}) => {
+        setPaymentActionLoading(true);
+        try {
+            await api.post(`/operations/payments/${paymentId}/${action}/`, payload);
+            await fetchPolicyDetails();
+        } catch (err) {
+            alert('Payment action failed');
+        } finally {
+            setPaymentActionLoading(false);
+        }
+    };
+
+    const handleGenerateSchedule = async () => {
+        const count = parseInt(prompt('Number of installments?', '12'), 10);
+        if (!count || count <= 0) return;
+        setScheduleLoading(true);
+        try {
+            await api.post(`/operations/policies/${id}/generate-schedule/`, { count });
+            await fetchPolicyDetails();
+        } catch (err) {
+            alert('Schedule generation failed');
+        } finally {
+            setScheduleLoading(false);
+        }
+    };
+
     const getStatusBadge = (status) => {
         const statusStyles = {
             'ACTIVE': 'bg-green-100 text-green-800',
@@ -102,11 +143,115 @@ const PolicyDetails = () => {
                             {policy.policy_number} • {policy.policy_type}
                         </p>
                     </div>
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusBadge(policy.status)}`}>
-                        {policy.status}
-                    </span>
+                    <div className="flex items-center gap-3">
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusBadge(policy.status)}`}>
+                            {policy.status}
+                        </span>
+                        <div className="flex gap-2">
+                            <button
+                                className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+                                onClick={() => {
+                                    const count = prompt('How many installments do you want to generate?', '12');
+                                    if (!count) return;
+                                    const ok = confirm(`Generate a payment schedule with ${count} installments?`);
+                                    if (!ok) return;
+                                    setScheduleLoading(true);
+                                    api.post(`/operations/policies/${id}/generate-schedule/`, { count: parseInt(count, 10) })
+                                        .then(() => fetchPolicyDetails())
+                                        .catch(() => alert('Schedule generation failed'))
+                                        .finally(() => setScheduleLoading(false));
+                                }}
+                                disabled={scheduleLoading}
+                            >
+                                <CalendarIcon className="h-4 w-4" />
+                                Generate Schedule
+                            </button>
+                            {policy.status === 'ACTIVE' && (
+                                <button
+                                    className="inline-flex items-center gap-1 rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-50"
+                                    onClick={() => {
+                                        const ok = confirm('Are you sure you want to cancel this policy? This action cannot be undone.');
+                                        if (ok) handlePolicyAction('cancel');
+                                    }}
+                                    disabled={policyActionLoading}
+                                >
+                                    <XCircleIcon className="h-4 w-4" />
+                                    Cancel Policy
+                                </button>
+                            )}
+                            {policy.status === 'ACTIVE' && (
+                                <button
+                                    className="inline-flex items-center gap-1 rounded-md bg-gray-700 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-gray-600 disabled:opacity-50"
+                                    onClick={() => {
+                                        const ok = confirm('Mark this policy as expired?');
+                                        if (ok) handlePolicyAction('expire');
+                                    }}
+                                    disabled={policyActionLoading}
+                                >
+                                    <ClockIcon className="h-4 w-4" />
+                                    Mark Expired
+                                </button>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            {/* Late Charges Summary - if any exist */}
+            {policyData.payments && policyData.payments.some(p => p.late_charge) && (
+                <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-lg p-4 mb-6">
+                    <div className="flex">
+                        <div className="flex-shrink-0">
+                            <span className="text-2xl">⚠️</span>
+                        </div>
+                        <div className="ml-3">
+                            <h3 className="text-sm font-bold text-yellow-900">Late Payment Charges Applied</h3>
+                            <p className="text-sm text-yellow-800 mt-1">
+                                This policy has {policyData.payments.filter(p => p.late_charge).length} late charge(s) applied to overdue payments.
+                                {policyData.payments.filter(p => p.late_charge && !p.late_charge.waived).length > 0 && (
+                                    <>
+                                        {' '}
+                                        Total active charges: <strong>${policyData.payments
+                                            .filter(p => p.late_charge && !p.late_charge.waived)
+                                            .reduce((sum, p) => sum + parseFloat(p.late_charge.charge_amount), 0)
+                                            .toLocaleString()}</strong>
+                                    </>
+                                )}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Coverage Alert - claims exceeding premium */}
+            {statistics.claim_exceeds_premium && (
+                <div className="bg-red-50 border-l-4 border-red-400 rounded-lg p-4 mb-6">
+                    <div className="flex">
+                        <div className="flex-shrink-0">
+                            <span className="text-2xl">🚨</span>
+                        </div>
+                        <div className="ml-3">
+                            <h3 className="text-sm font-bold text-red-900">Approved Claims Exceed Policy Premium</h3>
+                            <p className="text-sm text-red-800 mt-1">
+                                Approved claim total has exceeded this policy's premium amount. Remaining coverage: <strong>${parseFloat(statistics.remaining_coverage || 0).toLocaleString()}</strong>.
+                            </p>
+                            {policy.status === 'ACTIVE' && (
+                                <div className="mt-3">
+                                    <button
+                                        className="inline-flex items-center gap-1 rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-red-500"
+                                        onClick={() => {
+                                            const ok = confirm('Approved payouts exceed premium. Expire this policy now?');
+                                            if (ok) handlePolicyAction('expire');
+                                        }}
+                                    >
+                                        Mark Expired
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Main Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -195,6 +340,98 @@ const PolicyDetails = () => {
                         <div className="px-6 py-4">
                             {policyData.payments && policyData.payments.length > 0 ? (
                                 <>
+                                    {/* Payment Summary Cards */}
+                                    {(() => {
+                                        // Financial calculations with edge case handling
+                                        const payments = policyData.payments || [];
+                                        const today = new Date();
+
+                                        const totalDue = payments.reduce((sum, p) => {
+                                            const amount = parseFloat(p.amount_due) || 0;
+                                            return sum + amount;
+                                        }, 0);
+
+                                        const totalPaid = payments.reduce((sum, p) => {
+                                            const amount = parseFloat(p.amount_paid) || 0;
+                                            return sum + (amount || 0);
+                                        }, 0);
+
+                                        const totalOutstanding = totalDue - totalPaid;
+                                        const paidPercentage = totalDue > 0 ? ((totalPaid / totalDue) * 100).toFixed(1) : 0;
+
+                                        const paidCount = payments.filter(p => p.status === 'PAID').length;
+                                        const overdueCount = payments.filter(p => (p.is_overdue) || (p.status !== 'PAID' && new Date(p.due_date) < today)).length;
+                                        const pendingCount = payments.filter(p => p.status === 'PENDING' && !(p.status !== 'PAID' && new Date(p.due_date) < today)).length;
+                                        const failedCount = payments.filter(p => p.status === 'FAILED').length;
+
+                                        return (
+                                            <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                {/* Total Due */}
+                                                <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-4">
+                                                    <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Total Due</p>
+                                                    <p className="mt-2 text-2xl font-bold text-blue-900">${totalDue.toLocaleString('en-US', { maximumFractionDigits: 2 })}</p>
+                                                    <p className="mt-1 text-xs text-blue-700">{policyData.payments.length} installments</p>
+                                                </div>
+
+                                                {/* Total Paid */}
+                                                <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg p-4">
+                                                    <p className="text-xs font-semibold text-green-600 uppercase tracking-wide">Total Paid</p>
+                                                    <p className="mt-2 text-2xl font-bold text-green-900">${totalPaid.toLocaleString('en-US', { maximumFractionDigits: 2 })}</p>
+                                                    <p className="mt-1 text-xs text-green-700">{paidCount} paid</p>
+                                                </div>
+
+                                                {/* Outstanding */}
+                                                <div className="bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200 rounded-lg p-4">
+                                                    <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Outstanding</p>
+                                                    <p className="mt-2 text-2xl font-bold text-amber-900">${totalOutstanding.toLocaleString('en-US', { maximumFractionDigits: 2 })}</p>
+                                                    <p className="mt-1 text-xs text-amber-700">{pendingCount + overdueCount} remaining</p>
+                                                </div>
+
+                                                {/* Collection Rate */}
+                                                <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-4">
+                                                    <p className="text-xs font-semibold text-purple-600 uppercase tracking-wide">Collection Rate</p>
+                                                    <p className="mt-2 text-2xl font-bold text-purple-900">{paidPercentage}%</p>
+                                                    <div className="mt-2 w-full bg-purple-300 rounded-full h-2">
+                                                        <div className="bg-purple-600 h-2 rounded-full" style={{ width: `${Math.min(paidPercentage, 100)}%` }}></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Status Breakdown */}
+                                    <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-3 text-center text-xs">
+                                        {(() => {
+                                            const payments = policyData.payments || [];
+                                            const today = new Date();
+                                            const paid = payments.filter(p => p.status === 'PAID').length;
+                                            const overdue = payments.filter(p => (p.is_overdue) || (p.status !== 'PAID' && new Date(p.due_date) < today)).length;
+                                            const pending = payments.filter(p => p.status === 'PENDING' && !(p.status !== 'PAID' && new Date(p.due_date) < today)).length;
+                                            const failed = payments.filter(p => p.status === 'FAILED').length;
+
+                                            return (
+                                                <>
+                                                    <div className="bg-green-50 rounded p-3">
+                                                        <p className="font-semibold text-green-700">{paid}</p>
+                                                        <p className="text-green-600">Paid</p>
+                                                    </div>
+                                                    <div className="bg-blue-50 rounded p-3">
+                                                        <p className="font-semibold text-blue-700">{pending}</p>
+                                                        <p className="text-blue-600">Pending</p>
+                                                    </div>
+                                                    <div className="bg-red-50 rounded p-3">
+                                                        <p className="font-semibold text-red-700">{overdue}</p>
+                                                        <p className="text-red-600">Overdue</p>
+                                                    </div>
+                                                    <div className="bg-gray-50 rounded p-3">
+                                                        <p className="font-semibold text-gray-700">{failed}</p>
+                                                        <p className="text-gray-600">Failed</p>
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+
                                     {/* Payment Chart */}
                                     <div className="mb-6">
                                         <ResponsiveContainer width="100%" height={250}>
@@ -218,8 +455,8 @@ const PolicyDetails = () => {
 
                                     {/* Payment List */}
                                     <div className="space-y-3">
-                                        <h4 className="text-sm font-medium text-gray-700 mb-3">Recent Payments</h4>
-                                        {policyData.payments.slice(0, 6).map((payment) => {
+                                        <h4 className="text-sm font-medium text-gray-700 mb-3">All Payments ({policyData.payments.length} total)</h4>
+                                        {policyData.payments.map((payment) => {
                                             const statusStyles = {
                                                 'PAID': 'bg-green-100 text-green-800',
                                                 'PENDING': 'bg-blue-100 text-blue-800',
@@ -265,6 +502,121 @@ const PolicyDetails = () => {
                                                                 <span className="ml-1 text-gray-900 font-mono text-xs">{payment.transaction_id}</span>
                                                             </div>
                                                         )}
+                                                        {payment.late_charge && (
+                                                            <div className="col-span-2 bg-yellow-50 border-l-4 border-yellow-400 rounded p-3 mt-2">
+                                                                <div className="space-y-2">
+                                                                    <div className="flex items-start justify-between">
+                                                                        <div>
+                                                                            <p className="text-xs font-bold text-yellow-900 uppercase">⚠️ Late Payment Charge Applied</p>
+                                                                        </div>
+                                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                                                            payment.late_charge.waived 
+                                                                                ? 'bg-gray-200 text-gray-800' 
+                                                                                : 'bg-yellow-200 text-yellow-900'
+                                                                        }`}>
+                                                                            {payment.late_charge.waived ? '✓ WAIVED' : 'ACTIVE'}
+                                                                        </span>
+                                                                    </div>
+                                                                    
+                                                                    {/* Charge Details */}
+                                                                    <div className="bg-white rounded p-2 border border-yellow-200">
+                                                                        <div className="space-y-1 text-xs">
+                                                                            <div className="flex justify-between">
+                                                                                <span className="font-medium text-gray-700">Charge Amount:</span>
+                                                                                <span className="font-bold text-yellow-900">${parseFloat(payment.late_charge.charge_amount).toLocaleString()}</span>
+                                                                            </div>
+                                                                            <div className="flex justify-between">
+                                                                                <span className="font-medium text-gray-700">Reason:</span>
+                                                                                <span className="text-gray-900">{payment.late_charge.reason}</span>
+                                                                            </div>
+                                                                            {payment.late_charge.waived_reason && (
+                                                                                <div className="flex justify-between pt-1 border-t border-yellow-200">
+                                                                                    <span className="font-medium text-gray-700">Waived Reason:</span>
+                                                                                    <span className="text-gray-900">{payment.late_charge.waived_reason}</span>
+                                                                                </div>
+                                                                            )}
+                                                                            {payment.late_charge.admin_notes && (
+                                                                                <div className="flex justify-between pt-1 border-t border-yellow-200">
+                                                                                    <span className="font-medium text-gray-700">Admin Notes:</span>
+                                                                                    <span className="text-gray-900">{payment.late_charge.admin_notes}</span>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                    
+                                                                    {/* Explanation */}
+                                                                    <div className="bg-blue-50 rounded p-2 border border-blue-200">
+                                                                        <p className="text-xs font-semibold text-blue-900 mb-1">💡 Why This Charge?</p>
+                                                                        <p className="text-xs text-blue-800 leading-relaxed">
+                                                                            This payment was due on <strong>{new Date(payment.due_date).toLocaleDateString()}</strong> but payment was not received. 
+                                                                            After exceeding the payment due date by a certain number of days, our system automatically applied a late charge based on our configured late payment policy to encourage timely payment.
+                                                                        </p>
+                                                                    </div>
+                                                                    
+                                                                    {/* Status Breakdown */}
+                                                                    <div className="grid grid-cols-3 gap-2">
+                                                                        <div className="bg-white rounded p-2 border border-gray-200 text-center">
+                                                                            <p className="text-xs text-gray-600">Due Amount</p>
+                                                                            <p className="font-bold text-gray-900">${parseFloat(payment.amount_due).toLocaleString()}</p>
+                                                                        </div>
+                                                                        <div className={`rounded p-2 border text-center ${payment.late_charge.is_paid ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                                                                            <p className="text-xs text-gray-600">Charge Fee</p>
+                                                                            <p className={`font-bold ${payment.late_charge.is_paid ? 'text-green-900' : 'text-yellow-900'}`}>
+                                                                                ${parseFloat(payment.late_charge.charge_amount).toLocaleString()}
+                                                                            </p>
+                                                                        </div>
+                                                                        <div className="bg-white rounded p-2 border border-gray-200 text-center">
+                                                                            <p className="text-xs text-gray-600">Total Due Now</p>
+                                                                            <p className="font-bold text-gray-900">
+                                                                                ${(parseFloat(payment.amount_due) + parseFloat(payment.late_charge.charge_amount)).toLocaleString()}
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {payment.late_charge.is_paid && (
+                                                                        <div className="bg-green-50 rounded p-2 border border-green-200">
+                                                                            <p className="text-xs font-semibold text-green-900">✓ Charge Paid</p>
+                                                                            {payment.late_charge.paid_date && (
+                                                                                <p className="text-xs text-green-800">Paid on: {new Date(payment.late_charge.paid_date).toLocaleDateString()}</p>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {payment.status !== 'PAID' && (
+                                                            <div className="col-span-2 flex gap-3 pt-2">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const amt = prompt('Confirm amount received', payment.amount_due);
+                                                                        if (!amt) return;
+                                                                        const ok = confirm(`Mark payment ${payment.payment_number} as PAID for $${amt}?`);
+                                                                        if (!ok) return;
+                                                                        handlePaymentAction(payment.id, 'mark-paid', { amount: amt });
+                                                                    }}
+                                                                    className="inline-flex items-center gap-1 rounded-md bg-green-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-green-500 disabled:opacity-50"
+                                                                    disabled={paymentActionLoading}
+                                                                >
+                                                                    <CheckCircleIcon className="h-3 w-3" />
+                                                                    Mark Paid
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const reason = prompt('Enter failure reason (optional)');
+                                                                        const ok = confirm(`Mark payment ${payment.payment_number} as FAILED?`);
+                                                                        if (!ok) return;
+                                                                        handlePaymentAction(payment.id, 'mark-failed', { reason });
+                                                                    }}
+                                                                    className="inline-flex items-center gap-1 rounded-md bg-red-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-50"
+                                                                    disabled={paymentActionLoading}
+                                                                >
+                                                                    <XCircleIcon className="h-3 w-3" />
+                                                                    Mark Failed
+                                                                </button>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             );
@@ -281,7 +633,7 @@ const PolicyDetails = () => {
                 {/* Right Column - Statistics */}
                 <div className="space-y-6">
                     <div className="bg-white shadow rounded-lg px-6 py-4">
-                        <h3 className="text-sm font-medium text-gray-500 mb-4">Quick Statistics</h3>
+                        <h3 className="text-sm font-medium text-gray-500 mb-4">Claim Statistics</h3>
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
                                 <span className="text-sm text-gray-600">Total Claims</span>
@@ -292,12 +644,26 @@ const PolicyDetails = () => {
                                 <span className="text-lg font-semibold text-green-600">{statistics.approved_claims}</span>
                             </div>
                             <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-600">Paid</span>
+                                <span className="text-lg font-semibold text-indigo-600">{statistics.paid_claims}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
                                 <span className="text-sm text-gray-600">Pending</span>
                                 <span className="text-lg font-semibold text-yellow-600">{statistics.pending_claims}</span>
                             </div>
-                            <div className="border-t pt-4">
-                                <span className="text-sm text-gray-600">Total Claimed</span>
-                                <p className="text-xl font-bold text-gray-900 mt-1">${parseFloat(statistics.total_claimed_amount).toLocaleString()}</p>
+                            <div className="border-t pt-4 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm text-gray-600">Claimed</span>
+                                    <p className="text-lg font-bold text-gray-900">${parseFloat(statistics.total_claimed_amount || 0).toLocaleString()}</p>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm text-gray-600">Approved</span>
+                                    <p className="text-lg font-bold text-green-700">${parseFloat(statistics.total_approved_claim_amount || 0).toLocaleString()}</p>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm text-gray-600">Paid</span>
+                                    <p className="text-lg font-bold text-indigo-700">${parseFloat(statistics.total_paid_claim_amount || 0).toLocaleString()}</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -415,7 +781,7 @@ const PolicyDetails = () => {
     async function handleClaimSubmit(e) {
         e.preventDefault();
         try {
-            await api.post('/claims/claims/', {
+            await api.post('/claims/', {
                 ...claimFormData,
                 policy: id,
                 claim_number: claimFormData.claim_number || `CLM-${Math.floor(Math.random() * 100000)}`,

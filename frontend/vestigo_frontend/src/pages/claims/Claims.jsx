@@ -1,17 +1,21 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import Modal from '../../components/ui/Modal';
 import Pagination from '../../components/ui/Pagination';
 import { MagnifyingGlassIcon } from '@heroicons/react/20/solid';
 
 const Claims = () => {
+    const navigate = useNavigate();
     const [claims, setClaims] = useState([]);
     const [policies, setPolicies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [statusUpdating, setStatusUpdating] = useState(false);
     const [formData, setFormData] = useState({
         claim_number: '', policy: '', incident_date: '',
-        description: '', claim_amount: '', status: 'SUBMITTED'
+        description: '', claim_amount: '', status: 'SUBMITTED',
+        attachments: null
     });
 
     // Search & Filter State
@@ -31,12 +35,20 @@ const Claims = () => {
         setCurrentPage(1);
     }, [searchTerm, statusFilter]);
 
+    const normalizeClaims = (data) => {
+        if (Array.isArray(data?.results)) return data.results;
+        if (Array.isArray(data)) return data;
+        if (Array.isArray(data?.data)) return data.data; // Some APIs wrap payloads
+        return [];
+    };
+
     const fetchClaims = async () => {
         try {
-            const response = await api.get('/claims/claims/');
-            setClaims(response.data);
+            const response = await api.get('/claims/');
+            setClaims(normalizeClaims(response.data));
         } catch (error) {
             console.error("Failed to fetch claims", error);
+            setClaims([]);
         } finally {
             setLoading(false);
         }
@@ -52,7 +64,9 @@ const Claims = () => {
     };
 
     // Filter Logic - Robust Null Safety
-    const filteredClaims = claims.filter(claim => {
+    const safeClaims = Array.isArray(claims) ? claims : [];
+
+    const filteredClaims = safeClaims.filter(claim => {
         const claimNum = claim.claim_number ? String(claim.claim_number).toLowerCase() : '';
         const policyNum = claim.policy_number ? String(claim.policy_number).toLowerCase() : '';
         const custName = claim.customer_name ? String(claim.customer_name).toLowerCase() : '';
@@ -73,6 +87,16 @@ const Claims = () => {
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
     const currentClaims = filteredClaims.slice(indexOfFirstItem, indexOfLastItem);
 
+    const allowedOptions = {
+        SUBMITTED: ['SUBMITTED', 'IN_REVIEW', 'REJECTED'],
+        IN_REVIEW: ['IN_REVIEW', 'APPROVED', 'REJECTED'],
+        APPROVED: ['APPROVED', 'PAID', 'REJECTED'],
+        REJECTED: ['REJECTED'],
+        PAID: ['PAID']
+    };
+
+    const fallbackOptions = ['SUBMITTED', 'IN_REVIEW', 'APPROVED', 'REJECTED', 'PAID'];
+
     const handleOpenModal = () => {
         setFormData({
             claim_number: `CLM-${Math.floor(Math.random() * 100000)}`,
@@ -80,7 +104,8 @@ const Claims = () => {
             incident_date: new Date().toISOString().split('T')[0],
             description: '',
             claim_amount: '',
-            status: 'SUBMITTED'
+            status: 'SUBMITTED',
+            attachments: null
         });
         setIsModalOpen(true);
     };
@@ -88,7 +113,19 @@ const Claims = () => {
     const handleFormSubmit = async (e) => {
         e.preventDefault();
         try {
-            await api.post('/claims/claims/', formData);
+            const formDataObj = new FormData();
+            formDataObj.append('claim_number', formData.claim_number);
+            formDataObj.append('policy', formData.policy);
+            formDataObj.append('incident_date', formData.incident_date);
+            formDataObj.append('description', formData.description);
+            formDataObj.append('claim_amount', formData.claim_amount);
+            formDataObj.append('status', formData.status);
+            if (formData.attachments) {
+                formDataObj.append('attachments', formData.attachments);
+            }
+            await api.post('/claims/', formDataObj, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
             fetchClaims();
             setIsModalOpen(false);
         } catch (error) {
@@ -97,8 +134,59 @@ const Claims = () => {
         }
     };
 
+    // Require user confirmation and notes on status changes
+    const handleStatusChange = async (claim, status) => {
+        setStatusUpdating(true);
+        try {
+            const payload = { status };
+            const note = prompt('Provide a reason/note for this status change');
+            if (!note) {
+                alert('A note is required to change claim status.');
+                setStatusUpdating(false);
+                return;
+            }
+            payload.note = note;
+
+            if (status === 'APPROVED') {
+                const amount = prompt('Enter approved amount');
+                if (!amount) {
+                    setStatusUpdating(false);
+                    return;
+                }
+                const ok = confirm(`Approve claim with amount $${amount}?`);
+                if (!ok) { setStatusUpdating(false); return; }
+                payload.approved_amount = amount;
+            }
+
+            if (status === 'PAID') {
+                const paid = prompt('Enter paid amount');
+                if (!paid) {
+                    setStatusUpdating(false);
+                    return;
+                }
+                const payoutDate = prompt('Enter payout date (YYYY-MM-DD) or leave blank for today');
+                const ok = confirm(`Mark claim as PAID for $${paid}?`);
+                if (!ok) { setStatusUpdating(false); return; }
+                payload.paid_amount = paid;
+                if (payoutDate) payload.payout_date = payoutDate;
+            }
+
+            await api.post(`/claims/${claim.id}/set-status/`, payload);
+            fetchClaims();
+        } catch (error) {
+            console.error('Failed to update status', error);
+            alert(error?.response?.data?.error || 'Status update failed.');
+        } finally {
+            setStatusUpdating(false);
+        }
+    };
+
     const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        if (e.target.name === 'attachments') {
+            setFormData({ ...formData, attachments: e.target.files[0] });
+        } else {
+            setFormData({ ...formData, [e.target.name]: e.target.value });
+        }
     };
 
     if (loading) return <div>Loading...</div>;
@@ -167,7 +255,11 @@ const Claims = () => {
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {currentClaims.map((claim) => (
-                                    <tr key={claim.id}>
+                                    <tr 
+                                        key={claim.id}
+                                        className="hover:bg-gray-50 cursor-pointer"
+                                        onClick={() => navigate(`/claims/${claim.id}`)}
+                                    >
                                         <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-0">
                                             {claim.claim_number}
                                         </td>
@@ -175,12 +267,11 @@ const Claims = () => {
                                         <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{claim.customer_name}</td>
                                         <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${claim.claim_amount}</td>
                                         <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                            <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${claim.status === 'APPROVED' ? 'bg-green-50 text-green-700 ring-green-600/20' :
-                                                claim.status === 'REJECTED' ? 'bg-red-50 text-red-700 ring-red-600/20' :
-                                                    'bg-yellow-50 text-yellow-800 ring-yellow-600/20'
-                                                }`}>
-                                                {claim.status}
-                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800">
+                                                    {claim.status.replace('_', ' ')}
+                                                </span>
+                                            </div>
                                         </td>
                                         <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{claim.incident_date}</td>
                                     </tr>
@@ -225,6 +316,10 @@ const Claims = () => {
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Description</label>
                         <textarea name="description" value={formData.description} onChange={handleChange} rows={3} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2" required />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Attachments (optional)</label>
+                        <input type="file" name="attachments" onChange={handleChange} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
                     </div>
                     <div className="mt-5 sm:mt-6 sm:grid sm:grid-flow-row-dense sm:grid-cols-2 sm:gap-3">
                         <button type="submit" className="inline-flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 sm:col-start-2">Submit Claim</button>
