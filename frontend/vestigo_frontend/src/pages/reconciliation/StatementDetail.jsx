@@ -30,10 +30,10 @@ const StatementDetail = () => {
     };
 
     const handleManualMatch = async (lineId) => {
-        const policyId = policyIdInput[lineId];
-        if (!policyId) return alert("Enter Policy ID");
+        const policyNumber = policyIdInput[lineId];
+        if (!policyNumber) return alert("Enter Policy Number");
         try {
-            await api.post(`/reconciliation/lines/${lineId}/manual_match/`, { policy_id: policyId });
+            await api.post(`/reconciliation/lines/${lineId}/manual_match/`, { policy_number: policyNumber });
             fetchStatement();
         } catch (e) { alert("Match failed. Check Policy ID."); }
     };
@@ -80,7 +80,7 @@ const StatementDetail = () => {
                                 <div className="flex gap-2 w-full">
                                     <input
                                         type="text"
-                                        placeholder="Enter Policy ID to Match"
+                                        placeholder="Enter Policy Number to Match"
                                         className="text-sm border rounded px-2 py-1 flex-1"
                                         onChange={(e) => setPolicyIdInput({ ...policyIdInput, [line.id]: e.target.value })}
                                     />

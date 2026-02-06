@@ -2,6 +2,7 @@
 import os
 import environ
 from pathlib import Path
+from corsheaders.defaults import default_headers
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -14,7 +15,7 @@ SECRET_KEY = env('SECRET_KEY', default='django-insecure-test-key')
 DEBUG = env.bool('DEBUG', default=True)
 
 # Parse ALLOWED_HOSTS from .env (comma-separated)
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*', '95b6b3829841.ngrok-free.app'])
 
 # Application definition
 INSTALLED_APPS = [
@@ -130,7 +131,12 @@ if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = env.bool('CORS_ALLOW_ALL_ORIGINS', default=True)
 else:
     CORS_ALLOW_ALL_ORIGINS = False
-    CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
+    CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[''])
+
+# Allow ngrok and custom headers for CORS
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "ngrok-skip-browser-warning",
+]
 
 from datetime import timedelta
 

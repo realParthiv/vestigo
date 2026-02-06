@@ -364,6 +364,7 @@ const navigation = [
     { name: 'Claims', href: '/claims', icon: ClipboardDocumentCheckIcon },
     { name: 'Underwriting', href: '/underwriting', icon: ShieldCheckIcon },
     { name: 'Reconciliation', href: '/reconciliation', icon: ArrowUpTrayIcon },
+    { name: 'Brokerage Reconciliation', href: '/reconciliation/brokerage', icon: ArrowUpTrayIcon },
     { name: 'Reports', href: '/reports', icon: PresentationChartLineIcon },
     { name: 'Late Charges', href: '/late-charges', icon: DocumentTextIcon },
     // Removed 'Logout' from here to avoid duplication; it's handled in the bottom section

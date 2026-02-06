@@ -12,6 +12,8 @@ import SubmissionList from './pages/underwriting/SubmissionList';
 import SubmissionDetail from './pages/underwriting/SubmissionDetail';
 import ReconciliationDashboard from './pages/reconciliation/ReconciliationDashboard';
 import StatementDetail from './pages/reconciliation/StatementDetail';
+import BrokerageReconciliationDashboard from './pages/reconciliation/BrokerageReconciliationDashboard';
+import BrokerageStatementDetail from './pages/reconciliation/BrokerageStatementDetail';
 import ReportsDashboard from './pages/reports/ReportsDashboard';
 import HelpCenter from './pages/help/HelpCenter';
 import Settings from './pages/settings/Settings';
@@ -45,6 +47,8 @@ function App() {
             <Route path="underwriting/:id" element={<SubmissionDetail />} />
             <Route path="reconciliation" element={<ReconciliationDashboard />} />
             <Route path="reconciliation/:id" element={<StatementDetail />} />
+            <Route path="reconciliation/brokerage" element={<BrokerageReconciliationDashboard />} />
+            <Route path="reconciliation/brokerage/:id" element={<BrokerageStatementDetail />} />
             <Route path="reports" element={<ReportsDashboard />} />
             <Route path="settings" element={<Settings />} />
             <Route path="help" element={<HelpCenter />} />

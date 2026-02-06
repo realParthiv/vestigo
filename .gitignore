@@ -16,6 +16,24 @@ __pycache__/
 *.pyd
 *.log
 *.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.egg-info/
+.eggs/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.python-version
+pip-wheel-metadata/
+
+
+RFP FOR ERP SYSTEM 1 (1).pdf
+backend/bdm/You are a senior AI architect, quantitat.md
+backend/generate_brokerage_reconciliation_csv.py
+backend/generate_reconciliation_csv.py
 
 # Virtual Environment
 env/
@@ -47,9 +65,21 @@ pnpm-debug.log*
 # =========================
 .coverage
 htmlcov/
-.pytest_cache/
+coverage.xml
+junit.xml
 
 # =========================
 # Misc
 # =========================
 .cache/
+*.bak
+*.tmp
+.envrc
+.history/
+.vs/
+*.code-workspace
+
+# =========================
+# Project generated data
+# =========================
+backend/*_upload_*.csv
