@@ -83,3 +83,6 @@ junit.xml
 # Project generated data
 # =========================
 backend/*_upload_*.csv
+
+brokerage_reconciliation_story.md
+project_comprehensive_summary.md
